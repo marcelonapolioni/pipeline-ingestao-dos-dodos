@@ -38,41 +38,42 @@ def run_extraction() -> bool:
             "User-Agent": "Mozilla/5.0"
         }
         query = """
-        query NegociosExportacao($request: NegociosFilterInput!) {
-            negocios: negociosElastic(request: $request) {
-                items {
+    query FictitiousDeals($filter: DealsFilterInput!) {
+        deals: dealsElastic(filter: $filter) {
+            items {
+                id
+                title
+                contractNumber
+                createdAt
+                closedAt
+                amount
+                stage { name }
+                contact {
                     id
-                    nome
-                    contrato
-                    criadoEm
-                    fechamento
-                    valor
-                    etapa { nome }
-                    contato {
-                        id
-                        nome
-                        email
-                        documento
-                        cidade
-                        telefones
-                        avatar
-                    }
-                    vendedor { email }
-                    produto {
-                        id
-                        nome
-                        ramo
-                    }
-                    etiquetas { nome }
-                    anotacoes {
-                        criadoEm
-                        mensagem
-                        criadoPor { nome }
-                    }
+                    name
+                    email
+                    documentId
+                    city
+                    phones
+                    avatarUrl
+                }
+                seller { email }
+                product {
+                    id
+                    name
+                    category
+                }
+                tags { name }
+                notes {
+                    createdAt
+                    message
+                    createdBy { name }
                 }
             }
         }
-        """
+    }
+"""
+
         variables = {"request": {"take": 10000, "conditions": []}}
         gql_resp = requests.post(graphql_url, headers=headers, json={
             "query": query,
