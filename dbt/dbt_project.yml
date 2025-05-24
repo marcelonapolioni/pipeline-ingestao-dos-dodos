@@ -1,0 +1,40 @@
+# Nome único para o projeto dbt
+name: 'dashboard_corretora_dbt'
+version: '1.0.0'
+config-version: 2
+
+profile: 'github_actions_profile'
+
+# Caminhos padrão para os diferentes tipos de arquivos
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+# Diretórios de build/clean
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Configuração de mapeamento de pastas para datasets no BigQuery
+models:
+  dashboard_corretora_dbt:
+
+    base:  # Nova camada para modelos auxiliares
+      +schema: crm_base
+      +materialized: table
+
+    staging:
+      +materialized: view
+
+    intermediate:
+      +schema: crm_staging
+      +materialized: view
+
+    marts:
+      +schema: crm_analytics
+      +materialized: incremental
+      +incremental_strategy: merge

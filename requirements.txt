@@ -1,0 +1,6 @@
+requests
+pandas
+google-cloud-bigquery
+functions-framework
+dbt-bigquery
+flask

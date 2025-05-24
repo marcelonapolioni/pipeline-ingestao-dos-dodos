@@ -1,0 +1,40 @@
+# Cloud Build – imagem dbt‑runner
+steps:
+  # 1) Cria profiles.yml dinâmico
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+          cat > profiles.yml <<'EOF'
+          github_actions_profile:
+            target: dev
+            outputs:
+              dev:
+                type: bigquery
+                method: oauth
+                project: ${PROJECT_ID}
+                dataset: dbt
+                threads: 4
+                location: us-central1
+          EOF
+
+  # 2) Build & push da imagem
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_DBT_IMAGE_URI}
+      - -f
+      - dbt/Dockerfile
+      - .
+
+images:
+  - ${_DBT_IMAGE_URI}
+
+substitutions:
+  _DBT_IMAGE_URI: ""  # definida no workflow (ex.: --substitutions=_DBT_IMAGE_URI=...)
+
+options:
+  logging: GCS_ONLY
+logsBucket: gs://${PROJECT_ID}-cloudbuild-logs

@@ -1,0 +1,47 @@
+name: DBT Test (Staging)
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  dbt-test:
+    runs-on: ubuntu-latest
+
+    # variáveis de ambiente usadas pelo DBT / Makefile
+    env:
+      PROJECT_ID: pelagic-gist-311517
+      DATASET: crm_etl_dataset
+
+    steps:
+      - name: 🧭 Checkout do código
+        uses: actions/checkout@v3
+
+      # configura Application Default Credentials usando a chave da Service Account
+      - name: 🔐 Autenticar no GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      # opcional: instala o gcloud (nem sempre necessário)
+      - name: 🚀 Instalar gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      # instala Make, Python e DBT BigQuery para rodar os testes
+      - name: 📦 Instalar Make, Python e DBT
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make python3 python3-pip
+          pip3 install dbt-core dbt-bigquery
+
+      # configura o arquivo de profiles do DBT a partir do Secret
+      - name: 🗂️ Criar ~/.dbt/profiles.yml
+        run: |
+          mkdir -p ~/.dbt
+          echo "${{ secrets.DBT_PROFILES }}" > ~/.dbt/profiles.yml
+
+      - name: ✅ Executar testes DBT via Makefile
+        run: make test

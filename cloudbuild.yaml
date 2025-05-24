@@ -1,0 +1,31 @@
+# Arquivo de configuração do Cloud Build
+# Focado apenas em construir e enviar a imagem Docker.
+# O deploy é tratado pelo Terraform no workflow do GitHub Actions.
+
+steps:
+  # Etapa 1: Fazer o build da imagem Docker e enviar para o Artifact Registry
+  # Esta etapa chama 'make build' que executa 'docker build' e 'docker push'
+  - name: 'gcr.io/cloud-builders/docker' # Usar a imagem docker oficial
+    entrypoint: 'make'
+    args:
+      - 'build'
+      # A variável IMAGE_URI é passada pelo trigger (deploy.yaml) via --substitutions
+      # e fica disponível para o make. O nome da variável no Make é IMAGE_URI.
+      # O valor vem da substituição _IMAGE_URI.
+      - 'IMAGE_URI=${_IMAGE_URI}'
+
+# Tempo máximo de execução do build
+timeout: 1200s # 20 minutos
+
+# Logs do build (configurado para usar o bucket personalizado DENTRO do perímetro)
+options:
+  logging: GCS_ONLY
+logsBucket: 'gs://${PROJECT_ID}-cloudbuild-logs' # Usa a substituição nativa do Cloud Build
+
+# Definição das substituições esperadas (opcional, mas boa prática)
+substitutions:
+  _IMAGE_URI: "" # Define que esperamos uma substituição _IMAGE_URI
+
+
+
+

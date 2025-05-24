@@ -1,0 +1,12 @@
+project_id                = "pelagic-gist-311517"
+region                    = "us-central1"
+log_bucket_name           = "pelagic-gist-311517-cloudbuild-logs"
+image_uri                 = "us-central1-docker.pkg.dev/pelagic-gist-311517/docker-repo/dbt-image:latest"
+dbt_runner_image_uri      = "us-central1-docker.pkg.dev/pelagic-gist-311517/docker-repo/dbt-runner-image:latest"
+invoker_member            = "serviceAccount:github-actions-deploy@pelagic-gist-311517.iam.gserviceaccount.com"
+schedule_cron             = "30 9-17 * * 1-5"
+dbt_schedule_cron         = "45 9-17 * * 1-5"
+time_zone                 = "America/Sao_Paulo"
+
+cloudbuild_service_account_email     = "serviceAccount:667844461728@cloudbuild.gserviceaccount.com"
+compute_engine_service_account_email = "serviceAccount:667844461728-compute@developer.gserviceaccount.com"

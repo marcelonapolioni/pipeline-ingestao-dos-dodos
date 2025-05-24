@@ -1,0 +1,7 @@
+version: 2
+
+sources:
+  - name: crm_raw               # Nome lógico usado no modelo dbt
+    schema: crm_raw            # Nome do dataset no BigQuery
+    tables:
+      - name: negocios         # Nome da tabela no BigQuery

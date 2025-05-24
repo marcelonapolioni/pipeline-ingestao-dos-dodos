@@ -1,0 +1,142 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      PROJECT_ID: pelagic-gist-311517
+      REGION: us-central1
+      REPO: docker-repo
+      IMAGE_NAME: dbt-image # Imagem da aplicação principal
+      DBT_IMAGE_NAME: dbt-runner-image # Nome da imagem do dbt runner
+      LOG_BUCKET_NAME: pelagic-gist-311517-cloudbuild-logs
+
+    steps:
+      - name: 🛎️ Checkout do código
+        uses: actions/checkout@v3
+
+      - name: 🔑 Autenticar no GCP
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}' # Garanta que este segredo contém o JSON válido
+
+      - name: 🚀 Instalar gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: 🔨 Instalar Make
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make
+
+      - name: 🏷️ Definir Tags e URIs das Imagens Docker
+        id: image_uri_step
+        run: |
+          BUILD_TAG=$(git rev-parse --short HEAD)
+          # URI da imagem principal
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE_NAME }}:${BUILD_TAG}"
+          echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
+          echo "Calculated IMAGE_URI: ${IMAGE_URI}"
+          # URI da imagem dbt runner
+          DBT_IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.DBT_IMAGE_NAME }}:${BUILD_TAG}"
+          echo "DBT_IMAGE_URI=${DBT_IMAGE_URI}" >> $GITHUB_ENV
+          echo "Calculated DBT_IMAGE_URI: ${DBT_IMAGE_URI}"
+
+      # --- ETAPA DO CLOUD BUILD PARA A IMAGEM PRINCIPAL ---
+      - name: 🚀 Construir e Enviar Imagem Principal (via Cloud Build)
+        run: |
+          echo "▶ Disparando Cloud Build para construir a imagem principal: ${{ env.IMAGE_URI }}"
+          gcloud builds submit . \
+            --config=cloudbuild.yaml \
+            --substitutions=_IMAGE_URI="${{ env.IMAGE_URI }}"
+
+      # --- ETAPA PARA CONSTRUIR E ENVIAR IMAGEM DBT ---
+      - name: 🚀 Construir e Enviar Imagem dbt Runner (via Cloud Build)
+        run: |
+          echo "▶ Disparando Cloud Build para construir a imagem dbt runner: ${{ env.DBT_IMAGE_URI }}"
+          # Usa --config para apontar para o ficheiro de build do dbt
+          # Passa a URI completa como substituição _DBT_IMAGE_URI
+          gcloud builds submit . \
+            --config=cloudbuild-dbt.yaml \
+            --substitutions=_DBT_IMAGE_URI="${{ env.DBT_IMAGE_URI }}"
+
+      # --- ETAPAS DO TERRAFORM DEPOIS ---
+      - name: ⚙️ Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: 🧪 Terraform Init
+        working-directory: infra
+        run: terraform init -input=false
+
+      - name: 🔍 Terraform Plan
+        working-directory: infra
+        run: |
+          terraform plan -input=false -lock=false \
+            -var="project_id=${{ env.PROJECT_ID }}" \
+            -var="region=${{ env.REGION }}" \
+            -var="image_uri=${{ env.IMAGE_URI }}" \
+            -var="log_bucket_name=${{ env.LOG_BUCKET_NAME }}" \
+            -var="dbt_runner_image_uri=${{ env.DBT_IMAGE_URI }}" # Passa a URI da imagem dbt
+
+      - name: ✔️ Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        working-directory: infra
+        run: |
+          # Mantida a flag -lock=false conforme solicitado
+          terraform apply -auto-approve -lock=false \
+            -var="project_id=${{ env.PROJECT_ID }}" \
+            -var="region=${{ env.REGION }}" \
+            -var="image_uri=${{ env.IMAGE_URI }}" \
+            -var="log_bucket_name=${{ env.LOG_BUCKET_NAME }}" \
+            -var="dbt_runner_image_uri=${{ env.DBT_IMAGE_URI }}" # Passa a URI da imagem dbt
+
+      # --- ETAPAS PARA EXECUTAR DBT RUN (APENAS NO MAIN) ---
+
+      # Instala dependências Python (incluindo dbt)
+      - name: 🐍 Instalar Dependências Python
+        # Só executa no branch main, antes de rodar dbt
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "▶ Instalando dependências de requirements.txt..."
+          pip install -r requirements.txt # Garanta que dbt-bigquery está neste ficheiro
+
+      # Cria o ficheiro profiles.yml dinamicamente
+      - name: ⚙️ Configurar dbt profiles.yml
+        # Só executa no branch main, antes de rodar dbt
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p ~/.dbt # Cria a pasta se não existir
+          # Cria o ficheiro profiles.yml usando 'echo' e redirecionamento
+          echo 'github_actions_profile: # Nome do perfil (deve corresponder ao dbt_project.yml)
+            target: dev # Ou 'prod' - pode usar condicionais aqui baseado em github.ref
+            outputs:
+              dev:
+                type: bigquery
+                method: oauth # Usa credenciais ADC do runner
+                project: ${{ env.PROJECT_ID }}
+                dataset: dbt
+                threads: 4
+                location: ${{ env.REGION }}
+                # Adicione outros parâmetros se necessário (timeout, priority, etc.)
+          ' > ~/.dbt/profiles.yml
+          echo "Arquivo ~/.dbt/profiles.yml criado."
+
+      # Executa os comandos dbt
+      - name: ✨ Executar Transformações DBT
+        if: github.ref == 'refs/heads/main'
+        working-directory: dbt
+        run: |
+          echo "▶ Executando dbt deps e dbt run incremental..."
+          dbt deps --profile github_actions_profile
+          dbt run \
+            --profile github_actions_profile \
+          
