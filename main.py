@@ -18,9 +18,9 @@ def run_extraction() -> bool:
         auth_url = "https://paineldocorretor.auth0.com/oauth/token"
         auth_payload = {
             "grant_type": "http://auth0.com/oauth/grant-type/password-realm",
-            "username": "vanessa.burgo@razycorretora.com.br",
-            "password": "Razy2025!",
-            "audience": "https://paineldocorretor.com.br/api/",
+            "username": "email@email.com.",
+            "password": "senha",
+            "audience": "api",
             "scope": "openid profile offline_access email",
             "client_id": "MtCJ0bBdECwihpKoeTBf9L0E6JvCEx24",
             "realm": "Username-Password-Authentication"
